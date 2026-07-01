@@ -201,5 +201,3 @@ mosquitto_pub -h <RASPBERRY_PI_IP> -t "smart_gate/event" -m "CAR_AT_GATE"
 
 - OCR quality depends on lighting, camera position, and plate visibility.
 - The MQTT broker IP must match the Raspberry Pi network address.
-- The JSON database is suitable for a demonstration, not for production access control.
-- A production version would require stronger authentication, audit logs, input validation, and safer physical motor-control hardware.
