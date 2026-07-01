@@ -1,23 +1,30 @@
-import cv2
-import easyocr
+from __future__ import annotations
+
+import os
 import re
 import time
 from datetime import datetime
 from pathlib import Path
 
+import cv2
+import easyocr
+
 reader = easyocr.Reader(["en"], gpu=False)
-IMAGE_PATH = Path("/home/pi/kapija/zadnja_slika_tablice.jpg")
+IMAGE_PATH = Path(os.getenv("SMART_GATE_LAST_IMAGE", "/home/pi/smart_gate/last_license_plate_image.jpg"))
 
 
 def normalize_plate(text: str) -> str:
+    """Normalize raw OCR text into a compact license-plate string."""
     text = text.upper()
-    text = re.sub(r"[^A-Z0-9]", "", text)
-    return text
+    return re.sub(r"[^A-Z0-9]", "", text)
 
 
 def capture_image() -> str:
+    """Capture one image from the USB camera and return the saved file path."""
+    IMAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     for attempt in range(1, 6):
-        print(f"Pokusaj otvaranja kamere {attempt}/5...")
+        print(f"Camera open attempt {attempt}/5...")
         camera = cv2.VideoCapture(0, cv2.CAP_V4L2)
 
         if camera.isOpened():
@@ -30,7 +37,7 @@ def capture_image() -> str:
 
             if ret and frame is not None:
                 cv2.imwrite(str(IMAGE_PATH), frame)
-                print("Slika sacuvana:", IMAGE_PATH)
+                print("Image saved:", IMAGE_PATH)
                 return str(IMAGE_PATH)
 
         try:
@@ -40,25 +47,26 @@ def capture_image() -> str:
 
         time.sleep(1)
 
-    raise RuntimeError("Kamera nije pronadjena ili nije uspjela uslikati nakon 5 pokusaja.")
+    raise RuntimeError("Camera was not found or failed to capture an image after 5 attempts.")
 
 
 def read_plate_from_image(image_path: str) -> dict:
+    """Run EasyOCR on an image and return the best license-plate candidate."""
     results = reader.readtext(image_path)
 
     if not results:
         return {
-            "tablica": "",
-            "pouzdanost": 0.0,
+            "plate": "",
+            "confidence": 0.0,
             "raw_text": "",
             "status": "NO_TEXT",
-            "vrijeme": datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
         }
 
     best_text = ""
     best_confidence = 0.0
 
-    for box, text, confidence in results:
+    for _box, text, confidence in results:
         if confidence > best_confidence:
             best_text = text
             best_confidence = float(confidence)
@@ -66,18 +74,19 @@ def read_plate_from_image(image_path: str) -> dict:
     plate = normalize_plate(best_text)
 
     return {
-        "tablica": plate,
-        "pouzdanost": round(best_confidence, 2),
+        "plate": plate,
+        "confidence": round(best_confidence, 2),
         "raw_text": best_text,
         "status": "OK" if plate else "EMPTY_AFTER_CLEANUP",
-        "vrijeme": datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat(),
     }
 
 
-def procitaj_tablicu() -> dict:
+def read_license_plate() -> dict:
+    """Capture a new image and read the license plate from it."""
     image_path = capture_image()
     return read_plate_from_image(image_path)
 
 
 if __name__ == "__main__":
-    print(procitaj_tablicu())
+    print(read_license_plate())

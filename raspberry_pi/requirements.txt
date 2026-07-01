@@ -1,0 +1,4 @@
+paho-mqtt
+requests
+opencv-python
+easyocr

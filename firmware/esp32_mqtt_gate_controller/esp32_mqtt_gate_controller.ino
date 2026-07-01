@@ -2,19 +2,19 @@
 #include <PubSubClient.h>
 
 // =====================================================
-// WIFI + MQTT / RASPBERRY
+// WIFI + MQTT / RASPBERRY PI
 // =====================================================
 
-const char* WIFI_SSID = "Lab220";
-const char* WIFI_PASSWORD = "lab220lozinka";
+const char* WIFI_SSID = "";
+const char* WIFI_PASSWORD = "";
 
-const char* RASPBERRY_MQTT_IP = "10.12.20.122";
+const char* RASPBERRY_MQTT_IP = "";
 const int MQTT_PORT = 1883;
 
-const char* TOPIC_EVENT  = "kapija/event";   // ESP32 -> Raspberry: CAR_AT_GATE
-const char* TOPIC_CMD    = "kapija/cmd";     // Raspberry/Hermes -> ESP32: OPEN/CLOSE/STOP
-const char* TOPIC_STATE  = "kapija/state";   // ESP32 -> status stanja
-const char* TOPIC_STATUS = "kapija/status";  // ESP32 -> JSON status senzora
+const char* TOPIC_EVENT  = "smart_gate/event";   // ESP32 -> Raspberry: CAR_AT_GATE
+const char* TOPIC_CMD    = "smart_gate/cmd";     // Raspberry/Hermes -> ESP32: OPEN/CLOSE/STOP
+const char* TOPIC_STATE  = "smart_gate/state";   // ESP32 -> gate state status
+const char* TOPIC_STATUS = "smart_gate/status";  // ESP32 -> JSON sensor status
 
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
@@ -37,36 +37,36 @@ bool wifiWasConnected = false;
 bool mqttWasConnected = false;
 
 // =====================================================
-// PINOVI
+// PINS
 // =====================================================
 
-// ESP32 -> CMOS -> H-most
+// ESP32 -> CMOS -> H-bridge
 #define ESP_OUT_A 18
 #define ESP_OUT_B 19
 
-// Ako CMOS invertuje signal, stavi true.
-// Ako je CMOS samo buffer, ostavi false.
+// Set to true if the CMOS stage inverts the signal.
+// Keep false if the CMOS stage only works as a buffer.
 #define CMOS_INVERTED false
 
-// IR senzori kapije
+// Gate IR sensors
 #define IR_SENSOR_1 34
 #define IR_SENSOR_2 35
 
-// Ultrazvucni senzor - ulaz / vani
+// Ultrasonic sensor - entry / outside
 #define ULTRA_IN_TRIG 32
 #define ULTRA_IN_ECHO 14
 
-// Ultrazvucni senzor - izlaz / unutra
+// Ultrasonic sensor - exit / inside
 #define ULTRA_OUT_TRIG 33
 #define ULTRA_OUT_ECHO 26
 
-// LED diode
+// LEDs
 #define LED_OPENING 23
 #define LED_CLOSING 21
 #define LED_STATUS  22
 
 // =====================================================
-// PODESAVANJA
+// CONFIGURATION
 // =====================================================
 
 #define IR_ACTIVE_LOW true
@@ -78,7 +78,7 @@ const unsigned long MAX_CLOSE_TIME_MS = 25000;
 const unsigned long OCR_DECISION_TIMEOUT_MS = 90000;  // 1 min 30 s
 
 // =====================================================
-// STANJA
+// STATES
 // =====================================================
 
 enum GateState {
@@ -118,7 +118,7 @@ unsigned long carInClearStartedAt = 0;
 unsigned long waitingNoCarStartedAt = 0;
 
 // =====================================================
-// POMOCNE
+// HELPERS
 // =====================================================
 
 const char* stateName(GateState s) {
@@ -137,13 +137,13 @@ const char* stateName(GateState s) {
 const char* wifiStatusText(wl_status_t status) {
   switch (status) {
     case WL_IDLE_STATUS: return "IDLE";
-    case WL_NO_SSID_AVAIL: return "SSID nije pronadjen";
+    case WL_NO_SSID_AVAIL: return "SSID not found";
     case WL_SCAN_COMPLETED: return "SCAN zavrsen";
-    case WL_CONNECTED: return "SPOJEN";
-    case WL_CONNECT_FAILED: return "Konekcija neuspjela";
-    case WL_CONNECTION_LOST: return "Veza izgubljena";
+    case WL_CONNECTED: return "CONNECTED";
+    case WL_CONNECT_FAILED: return "Connection failed";
+    case WL_CONNECTION_LOST: return "Connection lost";
     case WL_DISCONNECTED: return "DISCONNECTED";
-    default: return "Nepoznat status";
+    default: return "Unknown status";
   }
 }
 
@@ -180,7 +180,7 @@ void printDistance(long d) {
 }
 
 
-// Forward deklaracije za funkcije koje se koriste prije definicije
+// Forward declarations for functions used before their definitions
 void publishStatus(bool force);
 void publishStatusText(const char* text);
 
@@ -210,7 +210,7 @@ void motorStop() {
 }
 
 void motorOpen() {
-  // ESP_OUT_A neaktivan, ESP_OUT_B aktivan
+  // ESP_OUT_A inactive, ESP_OUT_B active
   setMotorOutputs(false, true);
 
   digitalWrite(LED_OPENING, HIGH);
@@ -219,7 +219,7 @@ void motorOpen() {
 }
 
 void motorClose() {
-  // ESP_OUT_A aktivan, ESP_OUT_B neaktivan
+  // ESP_OUT_A active, ESP_OUT_B inactive
   setMotorOutputs(true, false);
 
   digitalWrite(LED_OPENING, LOW);
@@ -228,7 +228,7 @@ void motorClose() {
 }
 
 // =====================================================
-// SENZORI
+// SENSORS
 // =====================================================
 
 bool readIR(int pin) {
@@ -262,9 +262,9 @@ void readSensors() {
   ir1 = readIR(IR_SENSOR_1);
   ir2 = readIR(IR_SENSOR_2);
 
-  // oba IR aktivna = zatvorena
-  // oba IR neaktivna = otvorena
-  // jedan aktivan = izmedju
+  // both IR sensors active = closed
+  // both IR sensors inactive = open
+  // one IR sensor active = between end positions
   gateClosed = ir1 && ir2;
   gateOpen = !ir1 && !ir2;
   gateBetween = ir1 != ir2;
@@ -289,7 +289,7 @@ void updateOcrUnlockByCarLeaving() {
 
     if (millis() - carInClearStartedAt > CAR_CLEAR_RESET_MS) {
       if (ocrRequestedForCurrentCar || blockNewOcrUntilCarLeaves) {
-        Serial.println("[OCR] Ulazni senzor cist. Novi dolazak auta je dozvoljen.");
+        Serial.println("[OCR] Entry sensor is clear. A new vehicle arrival is allowed.");
       }
 
       ocrRequestedForCurrentCar = false;
@@ -303,7 +303,7 @@ void updateOcrUnlockByCarLeaving() {
 void resetDecisionAfterDenyOrFail(const char* reason) {
   Serial.print("[DECISION] ");
   Serial.print(reason);
-  Serial.println(". Kapija ostaje zatvorena. Cekam da auto ode sa senzora.");
+  Serial.println(". Gate remains closed. Waiting for the vehicle to leave the sensor.");
 
   motorStop();
 
@@ -347,35 +347,35 @@ bool logSensorChanges(bool force = false) {
     anyCar != prevAnyCar;
 
   if (force || changed) {
-    Serial.print("[SENZORI] ");
+    Serial.print("[SENSORS] ");
 
     Serial.print("IR1=");
-    Serial.print(ir1 ? "AKTIVAN" : "NEAKTIVAN");
+    Serial.print(ir1 ? "ACTIVE" : "INACTIVE");
 
     Serial.print(" | IR2=");
-    Serial.print(ir2 ? "AKTIVAN" : "NEAKTIVAN");
+    Serial.print(ir2 ? "ACTIVE" : "INACTIVE");
 
     Serial.print(" | gateClosed=");
-    Serial.print(gateClosed ? "DA" : "NE");
+    Serial.print(gateClosed ? "YES" : "NO");
 
     Serial.print(" | gateOpen=");
-    Serial.print(gateOpen ? "DA" : "NE");
+    Serial.print(gateOpen ? "YES" : "NO");
 
     Serial.print(" | gateBetween=");
-    Serial.print(gateBetween ? "DA" : "NE");
+    Serial.print(gateBetween ? "YES" : "NO");
 
     Serial.print(" | IN=");
     printDistance(distanceIn);
     Serial.print(" carIn=");
-    Serial.print(carIn ? "DA" : "NE");
+    Serial.print(carIn ? "YES" : "NO");
 
     Serial.print(" | OUT=");
     printDistance(distanceOut);
     Serial.print(" carOut=");
-    Serial.print(carOut ? "DA" : "NE");
+    Serial.print(carOut ? "YES" : "NO");
 
     Serial.print(" | anyCar=");
-    Serial.println(anyCar ? "DA" : "NE");
+    Serial.println(anyCar ? "YES" : "NO");
 
     prevIr1 = ir1;
     prevIr2 = ir2;
@@ -446,7 +446,7 @@ void connectWiFiNonBlocking() {
 
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiWasConnected) {
-      Serial.println("[WIFI] Spojeno.");
+      Serial.println("[WIFI] Connected.");
       Serial.print("[WIFI] SSID: ");
       Serial.println(WIFI_SSID);
       Serial.print("[WIFI] IP adresa: ");
@@ -457,14 +457,14 @@ void connectWiFiNonBlocking() {
   }
 
   if (wifiWasConnected) {
-    Serial.println("[WIFI] Veza izgubljena.");
+    Serial.println("[WIFI] Connection lost.");
     wifiWasConnected = false;
   }
 
   if (now - lastWifiAttempt > WIFI_RETRY_MS) {
     lastWifiAttempt = now;
 
-    Serial.print("[WIFI] Pokusavam spojiti na: ");
+    Serial.print("[WIFI] Trying to connect to: ");
     Serial.println(WIFI_SSID);
 
     WiFi.mode(WIFI_STA);
@@ -490,14 +490,14 @@ void connectMqttNonBlocking() {
 
   if (mqtt.connected()) {
     if (!mqttWasConnected) {
-      Serial.println("[MQTT] Spojeno.");
+      Serial.println("[MQTT] Connected.");
       mqttWasConnected = true;
     }
     return;
   }
 
   if (mqttWasConnected) {
-    Serial.println("[MQTT] Veza izgubljena.");
+    Serial.println("[MQTT] Connection lost.");
     mqttWasConnected = false;
   }
 
@@ -507,22 +507,22 @@ void connectMqttNonBlocking() {
 
   lastMqttAttempt = millis();
 
-  String clientId = "esp32-kapija-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+  String clientId = "esp32-smart-gate-" + String((uint32_t)ESP.getEfuseMac(), HEX);
 
-  Serial.print("[MQTT] Spajam se na ");
+  Serial.print("[MQTT] Connecting to ");
   Serial.print(RASPBERRY_MQTT_IP);
   Serial.print(":");
   Serial.println(MQTT_PORT);
 
   if (mqtt.connect(clientId.c_str(), TOPIC_STATE, 0, true, "OFFLINE")) {
-    Serial.println("[MQTT] Spojeno.");
+    Serial.println("[MQTT] Connected.");
     mqttWasConnected = true;
     mqtt.subscribe(TOPIC_CMD);
     mqtt.publish(TOPIC_STATE, "ONLINE", true);
     publishState();
     publishStatus(true);
   } else {
-    Serial.print("[MQTT] Neuspjelo. rc=");
+    Serial.print("[MQTT] Connection failed. rc=");
     Serial.println(mqtt.state());
   }
 }
@@ -537,7 +537,7 @@ void maintainNetwork() {
 }
 
 // =====================================================
-// AKCIJE
+// ACTIONS
 // =====================================================
 
 void startOpening() {
@@ -546,14 +546,14 @@ void startOpening() {
   if (changed) publishStatus(true);
 
   if (gateOpen) {
-    logImportant("[INFO] Kapija je vec otvorena.");
+    logImportant("[INFO] Gate is already open.");
     motorStop();
     setState(OPEN);
     publishStatus(true);
     return;
   }
 
-  logImportant("[GATE] Otvaranje.");
+  logImportant("[GATE] Opening.");
   motorOpen();
   setState(OPENING);
   publishStatus(true);
@@ -565,7 +565,7 @@ void startClosing() {
   if (changed) publishStatus(true);
 
   if (anyCar) {
-    logImportant("[SAFETY] Ne zatvaram. Auto je jos na senzoru.");
+    logImportant("[SAFETY] Closing blocked. A vehicle is still on the sensor.");
     motorStop();
 
     if (gateOpen) {
@@ -581,14 +581,14 @@ void startClosing() {
   }
 
   if (gateClosed) {
-    logImportant("[INFO] Kapija je vec zatvorena.");
+    logImportant("[INFO] Gate is already closed.");
     motorStop();
     setState(CLOSED);
     publishStatus(true);
     return;
   }
 
-  logImportant("[GATE] Zatvaranje.");
+  logImportant("[GATE] Closing.");
   motorClose();
   setState(CLOSING);
   publishStatus(true);
@@ -596,14 +596,14 @@ void startClosing() {
 
 bool sendCarAtGateToRaspberry() {
   if (!mqtt.connected()) {
-    logImportant("[MQTT] Nije spojeno. Ne mogu poslati CAR_AT_GATE.");
+    logImportant("[MQTT] Not connected. Cannot send CAR_AT_GATE.");
     return false;
   }
 
   bool ok = mqtt.publish(TOPIC_EVENT, "CAR_AT_GATE", false);
 
   if (ok) {
-    logImportant("[ULAZ] Poslan CAR_AT_GATE prema Raspberryju. Cekam OPEN.");
+    logImportant("[ENTRY] CAR_AT_GATE sent to Raspberry Pi. Waiting for OPEN.");
     ocrRequestedForCurrentCar = true;
     blockNewOcrUntilCarLeaves = false;
     waitingNoCarStartedAt = 0;
@@ -611,7 +611,7 @@ bool sendCarAtGateToRaspberry() {
     setState(WAITING_DECISION);
     publishStatus(true);
   } else {
-    logImportant("[MQTT] Publish CAR_AT_GATE nije prosao.");
+    logImportant("[MQTT] CAR_AT_GATE publish failed.");
   }
 
   return ok;
@@ -668,7 +668,6 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
   if (strcmp(cmd, "DENY") == 0 ||
       strcmp(cmd, "REJECT") == 0 ||
-      strcmp(cmd, "ODBIJ") == 0 ||
       strcmp(cmd, "CANCEL") == 0 ||
       strcmp(cmd, "NO_TEXT") == 0 ||
       strcmp(cmd, "OCR_FAILED") == 0) {
@@ -696,11 +695,11 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  Serial.println("[MQTT CMD] Nepoznata komanda.");
+  Serial.println("[MQTT CMD] Unknown command.");
 }
 
 // =====================================================
-// LOGIKA KAPIJE
+// GATE LOGIC
 // =====================================================
 
 void updateGateLogic() {
@@ -719,8 +718,8 @@ void updateGateLogic() {
     case CLOSED:
       motorStop();
 
-      // ULAZNI SENZOR: NE OTVARA SAM.
-      // Samo salje CAR_AT_GATE Raspberryju i ceka OPEN.
+      // ENTRY SENSOR: DOES NOT OPEN THE GATE BY ITSELF.
+      // It only sends CAR_AT_GATE to the Raspberry Pi and waits for OPEN.
       if (carIn && !ocrRequestedForCurrentCar && !blockNewOcrUntilCarLeaves && millis() - lastOcrPublishAttempt > OCR_RETRY_MS) {
         lastOcrPublishAttempt = millis();
         if (sendCarAtGateToRaspberry()) {
@@ -728,25 +727,25 @@ void updateGateLogic() {
         }
       }
 
-      // IZLAZNI SENZOR: vise NE OTVARA sam.
-      // Koristi se samo kasnije kao safety/hold-open dok je kapija otvorena ili se zatvara.
+      // EXIT SENSOR: no longer opens the gate by itself.
+      // It is used only later as a safety/hold-open sensor while the gate is open or closing.
       if (carOut && !lastCarOut) {
-        logImportant("[IZLAZ] Auto detektovan, ali ne otvaram bez OPEN komande.");
+        logImportant("[EXIT] Vehicle detected, but the gate will not open without an OPEN command.");
       }
       break;
 
     case WAITING_DECISION:
       motorStop();
 
-      // Dok cekamo OCR/Telegram, ESP32 ne pokrece motor.
-      // Otvaranje smije krenuti samo ako Raspberry/Hermes posalje OPEN na kapija/cmd.
+      // While waiting for OCR/Telegram, the ESP32 does not start the motor.
+      // Opening may start only after Raspberry Pi/Hermes sends OPEN to smart_gate/cmd.
       if (!carIn) {
         if (waitingNoCarStartedAt == 0) {
           waitingNoCarStartedAt = millis();
         }
 
-        // Rezervna zastita: ako Raspberry ne posalje DENY nakon odbijanja,
-        // a auto je otisao sa ulaznog senzora, dozvoli novi pokusaj.
+        // Fallback protection: if the Raspberry Pi does not send DENY after rejection,
+        // and the vehicle leaves the entry sensor, allow a new attempt.
         if (millis() - waitingNoCarStartedAt > WAITING_EMPTY_RESET_MS) {
           resetDecisionAfterDenyOrFail("WAITING_RESET_CAR_LEFT");
           break;
@@ -773,18 +772,18 @@ void updateGateLogic() {
           ocrRequestedForCurrentCar = true;
         }
       } else if (carOut && !lastCarOut) {
-        logImportant("[IZLAZ] Auto detektovan dok je kapija izmedju. Ne otvaram bez OPEN komande.");
+        logImportant("[EXIT] Vehicle detected while the gate is between end positions. Not opening without an OPEN command.");
       }
       break;
 
     case OPENING:
       if (gateOpen) {
-        logImportant("[GATE] Kapija otvorena.");
+        logImportant("[GATE] Gate open.");
         motorStop();
         setState(OPEN);
         publishStatus(true);
       } else if (millis() - stateStartedAt > MAX_OPEN_TIME_MS) {
-        logImportant("[ERROR] Timeout otvaranja.");
+        logImportant("[ERROR] Opening timeout.");
         motorStop();
         setState(ERROR_STATE);
         publishStatusText("ERROR_OPEN_TIMEOUT");
@@ -795,17 +794,17 @@ void updateGateLogic() {
     case OPEN:
       motorStop();
 
-      // Kapija ostaje otvorena dok god bilo koji ultrazvucni senzor vidi auto.
-      // Kad su oba senzora cista, odmah krece zatvaranje.
+      // The gate remains open while any ultrasonic sensor sees a vehicle.
+      // When both sensors are clear, closing starts immediately.
       if (!anyCar) {
-        logImportant("[GATE] Senzori cisti. Zatvaram odmah.");
+        logImportant("[GATE] Sensors are clear. Closing immediately.");
         startClosing();
       }
       break;
 
     case CLOSING:
       if (anyCar) {
-        logImportant("[SAFETY] Auto detektovan tokom zatvaranja. Ponovo otvaram.");
+        logImportant("[SAFETY] Vehicle detected during closing. Reopening.");
         motorStop();
         delay(300);
         startOpening();
@@ -813,12 +812,12 @@ void updateGateLogic() {
       }
 
       if (gateClosed) {
-        logImportant("[GATE] Kapija zatvorena.");
+        logImportant("[GATE] Gate closed.");
         motorStop();
         setState(CLOSED);
         publishStatus(true);
       } else if (millis() - stateStartedAt > MAX_CLOSE_TIME_MS) {
-        logImportant("[ERROR] Timeout zatvaranja.");
+        logImportant("[ERROR] Closing timeout.");
         motorStop();
         setState(ERROR_STATE);
         publishStatusText("ERROR_CLOSE_TIMEOUT");
@@ -864,7 +863,7 @@ void setup() {
 
   motorStop();
 
-  Serial.println("ESP32 KAPIJA START - WIFI + MQTT + RASPBERRY - RETRY AFTER DENY");
+  Serial.println("ESP32 SMART GATE START - WIFI + MQTT + RASPBERRY PI - RETRY AFTER DENY");
   Serial.print("WiFi SSID: ");
   Serial.println(WIFI_SSID);
   Serial.print("MQTT broker: ");
