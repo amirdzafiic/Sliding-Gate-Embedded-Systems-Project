@@ -29,36 +29,6 @@ Team members: **Amir Džafić, Dino Tahirović, Imran Čustović**
 - Safety logic: the gate does not close while a vehicle is detected.
 - Manual MQTT commands for testing and diagnostics.
 
-## Repository structure
-
-```text
-smart-gate-access-control/
-├── README.md
-├── docs/
-│   ├── Smart_Gate_Final_Implementation_Documentation.pdf
-│   └── Smart_Gate_Final_Implementation_Documentation.docx
-├── firmware/
-│   ├── esp32_mqtt_gate_controller/
-│   │   └── esp32_mqtt_gate_controller.ino
-│   └── esp32_standalone_gate_controller/
-│       └── esp32_standalone_gate_controller.ino
-├── raspberry_pi/
-│   ├── gate_controller.py
-│   ├── license_plate_ocr.py
-│   ├── plate_database.py
-│   ├── telegram_notifier.py
-│   └── requirements.txt
-├── mcp_server/
-│   ├── mcp_server.py
-│   ├── plate_database.py
-│   └── requirements.txt
-├── data/
-│   ├── allowed_plates.json
-│   └── pending_plate.example.json
-└── config/
-    └── config.example.env
-```
-
 ## Hardware overview
 
 | Component | Role |
@@ -128,21 +98,6 @@ cd /home/pi/smart_gate/raspberry_pi
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-Create configuration from the example:
-
-```bash
-cp ../config/config.example.env .env
-```
-
-Set the required values in `.env`, especially:
-
-```text
-MQTT_HOST=localhost
-TELEGRAM_BOT_TOKEN=YOUR_BOTFATHER_TOKEN
-TELEGRAM_CHAT_ID=YOUR_CHAT_ID
-SMART_GATE_DATA_DIR=/home/pi/hermes-timovi/tim09-root/data
 ```
 
 Run the Raspberry Pi controller:
@@ -243,11 +198,6 @@ mosquitto_pub -h <RASPBERRY_PI_IP> -t "smart_gate/event" -m "CAR_AT_GATE"
 
 `pending_plate.json` is generated at runtime when the OCR result is unknown or only similar to an allowed plate. It is not committed as a live data file because it is temporary runtime state.
 
-## Security notes
-
-Do not commit real Telegram tokens, WiFi passwords, private IP addresses from production networks, or real license-plate databases to a public repository. Use placeholders or environment variables for public GitHub uploads.
-
-## Known limitations
 
 - OCR quality depends on lighting, camera position, and plate visibility.
 - The MQTT broker IP must match the Raspberry Pi network address.
