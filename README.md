@@ -2,7 +2,7 @@
 
 ## Project Demonstration
 
-A demonstration video showing the smart gate system in operation is available here: [Watch on YouTube]([YOUR_YOUTUBE_LINK_HERE](https://www.youtube.com/watch?v=Bmjp82qZFfE)).
+A demonstration video showing the smart gate system in operation is available here: [Watch on YouTube](https://www.youtube.com/watch?v=Bmjp82qZFfE).
 
 ## Project summary
 
