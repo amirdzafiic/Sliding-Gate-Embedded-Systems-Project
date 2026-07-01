@@ -1,5 +1,9 @@
 # Smart Gate Access Control System
 
+## Project Demonstration
+
+A demonstration video showing the smart gate system in operation is available here: [Watch on YouTube]([YOUR_YOUTUBE_LINK_HERE](https://www.youtube.com/watch?v=Bmjp82qZFfE)).
+
 ## Project summary
 
 Smart Gate is a student embedded-systems project that demonstrates vehicle access control with license-plate recognition. The system detects a vehicle at the gate, captures the license plate with a Raspberry Pi camera, checks the plate against a local allowed-plates database, and controls a DC gate motor through an ESP32 controller.
@@ -57,6 +61,13 @@ Team members: **Amir Džafić, Dino Tahirović, Imran Čustović**
 | 23 | `LED_OPENING` | Opening indicator |
 | 21 | `LED_CLOSING` | Closing indicator |
 | 22 | `LED_STATUS` | Idle/status indicator |
+
+## Firmware Versions
+
+This repository contains two ESP32 firmware versions:
+
+- `esp32_mqtt_gate_controller.ino` – the full implementation used with Raspberry Pi, MQTT, camera-based license plate recognition, Telegram notifications, and manual approval or rejection of unknown license plates.
+- `esp32_standalone_gate_controller.ino` – a simplified test version that works without Raspberry Pi, MQTT, camera capture, OCR, or Telegram approval. In this mode, the gate opens automatically for every detected vehicle and is intended only for hardware testing.
 
 ## MQTT topics
 
